@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# Build / packaging output
+build/
+dist/
+installer_output/
+packaging/app.ico
+*.spec.bak
+
+# Generated at runtime
+assets/default_alert.wav
+*.log
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
