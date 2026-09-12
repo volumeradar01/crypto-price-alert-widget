@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import threading
 
-from PySide6.QtCore import Qt, QStringListModel, QTimer, Signal, Slot
+from PySide6.QtCore import QEvent, Qt, QStringListModel, QTimer, Signal, Slot
 from PySide6.QtWidgets import (
     QButtonGroup,
     QCheckBox,
@@ -94,6 +94,10 @@ class AlertDialog(QDialog):
         completer.setCompletionMode(QCompleter.PopupCompletion)
         completer.setMaxVisibleItems(12)
         self.ident.setCompleter(completer)
+        # Defensive: Enter/Return should always confirm a suggestion the dropdown
+        # is showing, never fall through and submit the whole dialog (which would
+        # save whatever raw text is currently typed, e.g. an unresolved stock name).
+        self.ident.installEventFilter(self)
 
         self.ident_hint = QLabel("type to search")
         self.ident_hint.setProperty("role", "hint")
@@ -168,6 +172,25 @@ class AlertDialog(QDialog):
         self._on_target_changed()
 
     # ----- reactive plumbing -------------------------------------
+    def eventFilter(self, obj, event):
+        if (
+            obj is self.ident
+            and event.type() == QEvent.KeyPress
+            and event.key() in (Qt.Key_Return, Qt.Key_Enter)
+        ):
+            completer = self.ident.completer()
+            popup = completer.popup() if completer else None
+            if popup is not None and popup.isVisible():
+                index = popup.currentIndex()
+                if not index.isValid() and self._completer_model.rowCount():
+                    index = self._completer_model.index(0, 0)  # nothing highlighted -> take the top match
+                if index.isValid():
+                    self.ident.setText(index.data())
+                    self._probe_timer.start(0)  # setText() doesn't emit textEdited
+                popup.hide()
+                return True  # consumed -- do not let it also submit the dialog
+        return super().eventFilter(obj, event)
+
     def _is_coingecko(self) -> bool:
         return self.source.currentData() == "coingecko"
 
