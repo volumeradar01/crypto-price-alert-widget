@@ -1,8 +1,7 @@
-"""REST price sources: CoinGecko, Binance spot + USDⓈ-M futures, and Yahoo Finance
-(US + Indian equities).
+"""REST price sources: CoinGecko, and Binance spot + USDⓈ-M futures.
 
 These provide the batch fallback for the WebSocket feed and the one-off price
-probe used by the alert dialog. No API key required for any of them.
+probe used by the alert dialog. No API key required.
 """
 
 from __future__ import annotations
@@ -135,66 +134,11 @@ class BinanceSource:
         return out
 
 
-class StockSource:
-    """US + Indian equities via Yahoo Finance's public chart endpoint.
-
-    Indian tickers use Yahoo's exchange suffixes: ``.NS`` (NSE) or ``.BO`` (BSE),
-    e.g. ``RELIANCE.NS``, ``TCS.BO``. US tickers are plain, e.g. ``AAPL``.
-
-    Yahoo's anonymous quote-batch endpoint (``v7/finance/quote``) now requires an
-    auth cookie/crumb, so this fetches one request per unique symbol via the
-    still-open ``v8/finance/chart`` endpoint. A bad/delisted ticker 404s on its
-    own request and is simply skipped -- it never blanks the other symbols.
-    """
-
-    name = "stock"
-    URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
-
-    def get_prices(self, alerts) -> dict[str, float]:
-        alerts = [a for a in alerts if a.symbol.strip()]
-        if not alerts:
-            return {}
-        by_symbol: dict[str, float] = {}
-        errors = 0
-        for symbol in sorted({a.symbol.strip().upper() for a in alerts}):
-            price = self._fetch_one(symbol)
-            if price is not None:
-                by_symbol[symbol] = price
-            else:
-                errors += 1
-        if errors and not by_symbol:
-            raise SourceError(f"no price data for {errors} stock symbol(s)")
-        return {
-            a.id: by_symbol[a.symbol.strip().upper()]
-            for a in alerts
-            if a.symbol.strip().upper() in by_symbol
-        }
-
-    def probe(self, symbol: str) -> float | None:
-        return self._fetch_one(symbol.strip().upper())
-
-    def _fetch_one(self, symbol: str) -> float | None:
-        try:
-            resp = requests.get(
-                self.URL.format(symbol=symbol), headers=_HEADERS, timeout=_TIMEOUT
-            )
-            if resp.status_code == 404:
-                return None  # unknown/delisted ticker -- not a feed-wide failure
-            resp.raise_for_status()
-            meta = resp.json()["chart"]["result"][0]["meta"]
-            price = meta.get("regularMarketPrice")
-            return float(price) if price is not None else None
-        except (requests.RequestException, ValueError, KeyError, TypeError, IndexError):
-            return None
-
-
 def probe_price(alert) -> float | None:
     """Best-effort current price for an Alert-like object (blocking)."""
     try:
         if alert.source == "coingecko":
             return CoinGeckoSource().probe(alert.coin_id, alert.vs_currency)
-        if alert.source == "stock":
-            return StockSource().probe(alert.symbol)
         return BinanceSource(alert.stream_market()).probe(alert.symbol)
     except Exception:  # noqa: BLE001
         return None
@@ -207,10 +151,6 @@ if __name__ == "__main__":  # python -m crypto_price_alert.sources
     cg = Alert(threshold=0, source="coingecko", coin_id="bitcoin", vs_currency="usd")
     sp = Alert(threshold=0, source="binance", market="spot", symbol="BTCUSDT")
     fu = Alert(threshold=0, source="binance", market="futures", symbol="BTCUSDT")
-    us = Alert(threshold=0, source="stock", market="US", symbol="AAPL")
-    inr = Alert(threshold=0, source="stock", market="IN", symbol="RELIANCE.NS")
-    print("CoinGecko    :", CoinGeckoSource().get_prices([cg]))
+    print("CoinGecko :", CoinGeckoSource().get_prices([cg]))
     print("Binance spot :", BinanceSource("spot").get_prices([sp]))
     print("Binance fut  :", BinanceSource("futures").get_prices([fu]))
-    print("Stock US     :", StockSource().get_prices([us]))
-    print("Stock IN     :", StockSource().get_prices([inr]))

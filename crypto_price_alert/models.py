@@ -7,9 +7,8 @@ from dataclasses import asdict, dataclass, field, fields
 from typing import Optional
 
 DIRECTIONS = ("above", "below")
-SOURCES = ("coingecko", "binance", "stock")
-MARKETS = ("spot", "futures")          # Alert.market when source == "binance"
-STOCK_MARKETS = ("US", "IN")           # Alert.market when source == "stock"
+SOURCES = ("coingecko", "binance")
+MARKETS = ("spot", "futures")
 
 # Common Binance quote assets, longest first so e.g. BTCUSDT -> USDT not USD.
 _QUOTE_ASSETS = (
@@ -41,10 +40,10 @@ class Alert:
 
     threshold: float
     direction: str = "above"          # "above" | "below"
-    source: str = "coingecko"         # "coingecko" | "binance" | "stock"
+    source: str = "coingecko"         # "coingecko" | "binance"
     coin_id: str = "bitcoin"          # CoinGecko id
-    symbol: str = "BTCUSDT"           # Binance trading pair, or a Yahoo Finance ticker
-    market: str = "spot"              # binance: "spot"|"futures"; stock: "US"|"IN" (region)
+    symbol: str = "BTCUSDT"           # Binance trading pair
+    market: str = "spot"              # Binance market: "spot" | "futures"
     vs_currency: str = "usd"          # CoinGecko quote currency
     label: str = ""                   # optional friendly name
     sound_path: Optional[str] = None  # per-alert sound override
@@ -70,15 +69,11 @@ class Alert:
     def unit(self) -> str:
         if self.source == "coingecko":
             return (self.vs_currency or "").upper()
-        if self.source == "stock":
-            return "INR" if self.market == "IN" else "USD"
         return _quote_asset(self.symbol)
 
     def source_label(self) -> str:
         if self.source == "coingecko":
             return "CoinGecko"
-        if self.source == "stock":
-            return "Indian Stock" if self.market == "IN" else "US Stock"
         return "Binance Futures" if self.market == "futures" else "Binance Spot"
 
     def stream_market(self) -> str:
@@ -113,10 +108,8 @@ class Alert:
             alert.direction = "above"
         if alert.source not in SOURCES:
             alert.source = "coingecko"
-        if alert.source == "binance" and alert.market not in MARKETS:
+        if alert.market not in MARKETS:
             alert.market = "spot"
-        elif alert.source == "stock" and alert.market not in STOCK_MARKETS:
-            alert.market = "US"
         if alert.triggered_state not in ("none", "above", "below"):
             alert.triggered_state = "none"
         try:

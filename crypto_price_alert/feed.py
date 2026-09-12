@@ -19,7 +19,7 @@ from PySide6.QtCore import QObject, QTimer, QUrl, Signal, Slot
 from PySide6.QtWebSockets import QWebSocket
 
 from .config import MAX_INTERVAL, MIN_INTERVAL
-from .sources import BinanceSource, CoinGeckoSource, SourceError, StockSource
+from .sources import BinanceSource, CoinGeckoSource, SourceError
 
 log = logging.getLogger(__name__)
 
@@ -238,16 +238,6 @@ class PriceFeed(QObject):
             except Exception as e:  # noqa: BLE001
                 log.exception("binance %s poll failed", market)
                 errors.append(f"binance/{market}: {e}")
-
-        stocks = [a for a in alerts if a.source == "stock"]
-        if stocks:
-            try:
-                prices.update(StockSource().get_prices(stocks))
-            except SourceError as e:
-                errors.append(f"stock: {e}")
-            except Exception as e:  # noqa: BLE001
-                log.exception("stock poll failed")
-                errors.append(f"stock: {e}")
 
         self._rest_prices.update(prices)
         self._flush()

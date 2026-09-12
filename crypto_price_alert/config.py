@@ -88,7 +88,7 @@ class Config:
         )
         c.global_sound_path = str(d.get("global_sound_path", "") or "")
         c.default_source = d.get("default_source", "binance")
-        if c.default_source not in ("coingecko", "binance", "stock"):
+        if c.default_source not in ("coingecko", "binance"):
             c.default_source = "binance"
         c.always_on_top = bool(d.get("always_on_top", False))
         c.opacity = _clamp(d.get("opacity", 0.97), 0.5, 1.0, 0.97)

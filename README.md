@@ -1,22 +1,18 @@
 # Crypto Price Alert Widget for Windows
 
-**A free, lightweight desktop price alert app for crypto *and* stocks.** Set price
-alerts for Bitcoin, Ethereum, any altcoin, **US stocks** (AAPL, TSLA, MSFT…) and
-**Indian stocks** (NSE/BSE — RELIANCE, TCS, INFY…). Get a **desktop notification + a
-looping sound** the moment a price **rises above** or **falls below** your target, and
-keep a small always‑available **price widget** on your desktop and in the system tray.
+**A free, lightweight desktop crypto price alert app.** Set price alerts for Bitcoin,
+Ethereum and any altcoin, get a **desktop notification + a looping sound** the moment a
+coin **rises above** or **falls below** your target, and keep a small always‑available
+**price widget** on your desktop and in the system tray.
 
-Crypto prices come **live over WebSocket** from **Binance** (spot **and** USDⓈ‑M
-futures); **CoinGecko** covers thousands of altcoins; **stock prices** (US + India) come
-from **Yahoo Finance** — no login for any of them. You pick the source per alert. 100%
-local, no account, no API key, no data leaves your PC.
+Prices come **live over WebSocket** from **Binance** (spot **and** USDⓈ‑M futures) and
+over REST from **CoinGecko** — you pick the source per alert. 100% local, no account, no
+API key, no data leaves your PC.
 
 <p align="center">
-  <img src="docs/widget-light.png" alt="Crypto price alert desktop widget – light theme, showing Bitcoin and Ethereum price alerts" width="330">
-  &nbsp;
-  <img src="docs/widget-stocks.png" alt="Stock price alert widget – Apple (US) and Reliance (India/NSE) alerts alongside a Bitcoin alert" width="330">
-  &nbsp;
-  <img src="docs/widget-dark.png" alt="Crypto price alert desktop widget – dark theme" width="330">
+  <img src="docs/widget-light.png" alt="Crypto price alert desktop widget – light theme, showing Bitcoin and Ethereum price alerts" width="360">
+  &nbsp;&nbsp;
+  <img src="docs/widget-dark.png" alt="Crypto price alert desktop widget – dark theme" width="360">
 </p>
 
 <p align="center">
@@ -37,13 +33,9 @@ local, no account, no API key, no data leaves your PC.
   stay latched until you press **Re‑arm** (watch again) or **Dismiss** (clear).
 - ⚡ **Real‑time prices over WebSocket** for Binance **Spot** and **Futures**; CoinGecko
   is polled on an interval. Automatic REST fallback, all within API rate limits.
-- 🔀 **Per‑alert price source** — CoinGecko, Binance Spot, Binance USDⓈ‑M Futures, or
-  **Stocks (US / India)** — with a **searchable symbol picker** (validated lists for
-  crypto; live ticker search for stocks) and a **live current price** shown while you
-  set the alert.
-- 📈 **Stock price alerts** for US markets (NASDAQ, NYSE…) and **Indian markets (NSE /
-  BSE)** via Yahoo Finance — search by company name or ticker, no brokerage account
-  needed.
+- 🔀 **Per‑alert price source** — CoinGecko, Binance Spot, or Binance USDⓈ‑M Futures —
+  with a **searchable, validated symbol picker** (no more silent typos) and a **live
+  current price** shown while you set the alert.
 - 🖥️ **Always‑on‑top desktop widget** (optional) **+ system‑tray icon**. Frameless,
   draggable, adjustable opacity.
 - 🌗 **Light / dark / follow‑system** theme.
@@ -51,7 +43,7 @@ local, no account, no API key, no data leaves your PC.
   every reboot with your alerts and window position intact.
 - 🔗 One‑click links to the **Relative Volume** and **Market Structure** scanners.
 - 🔒 **Local‑only & free.** No sign‑up, no API key; the only network traffic is the price
-  requests to CoinGecko / Binance / Yahoo Finance.
+  requests to CoinGecko / Binance.
 
 ---
 
@@ -81,19 +73,14 @@ Click **＋** on the widget:
 
 | Field | Notes |
 | --- | --- |
-| **Source** | CoinGecko, Binance Spot, Binance Futures, or **Stock** |
-| **Market / Region** | Binance: Spot or Futures. Stock: **United States** or **India**. |
-| **Symbol** | Start typing to search. Crypto/Binance: validated list (`bitcoin`, `solana` … / `BTCUSDT`, `ETHUSDT` …). Stock: live company/ticker search (`apple`, `AAPL` … / `reliance`, `RELIANCE.NS` …). The **current price** shows live underneath. |
+| **Source** | CoinGecko, Binance Spot, or Binance Futures |
+| **Symbol** | Start typing to search the validated list (`bitcoin`, `solana` … / `BTCUSDT`, `ETHUSDT` …). The **current price** shows live underneath. |
 | **Threshold** & **Direction** | Rises above / Falls below |
 | **Alert sound** | Optional per‑alert override; blank = the global sound |
 
 <p align="center">
   <img src="docs/new-alert.png" alt="Add a new crypto price alert – choose Binance Futures, symbol BTCUSDT, threshold and direction" width="460">
 </p>
-
-**Stock ticker format:** US stocks use the plain ticker (`AAPL`, `TSLA`). Indian stocks
-use Yahoo's exchange suffix — `.NS` for NSE (`RELIANCE.NS`) or `.BO` for BSE
-(`TCS.BO`) — the search box fills this in for you automatically.
 
 ### When an alert fires
 You get **one** desktop notification, the **sound loops**, and the card turns
@@ -139,8 +126,7 @@ python -m crypto_price_alert          # console + logs
 > Microsoft Store build of Python), a virtual environment **inside the project folder**
 > as shown above keeps the install path short and fixes it.
 
-Quick live check of all the feeds (CoinGecko, Binance spot & futures, and Yahoo Finance
-US + Indian stocks):
+Quick live check of all three feeds:
 
 ```powershell
 python -m crypto_price_alert.sources
@@ -174,8 +160,8 @@ Build pieces: [`build.ps1`](build.ps1) ·
 | Module | Role |
 | --- | --- |
 | [`feed.py`](crypto_price_alert/feed.py) | Background thread. Binance spot/futures prices via `QWebSocket` (`<symbol>@bookTicker` → mid price), re‑subscribed when alerts change; CoinGecko + fallback via REST timer. Evaluates threshold crossings. |
-| [`sources.py`](crypto_price_alert/sources.py) | REST: CoinGecko `simple/price`, Binance spot & USDⓈ‑M futures `ticker/price` (batched, full‑list fallback so one bad symbol can't blank the feed), and Yahoo Finance `chart` (one request per stock ticker; a bad/delisted ticker 404s on its own and is skipped). |
-| [`symbols.py`](crypto_price_alert/symbols.py) | Cached, validated symbol / coin lists for crypto (24 h TTL) + **live Yahoo Finance ticker search** for stocks. |
+| [`sources.py`](crypto_price_alert/sources.py) | REST: CoinGecko `simple/price`, Binance spot & USDⓈ‑M futures `ticker/price` (batched, full‑list fallback so one bad symbol can't blank the feed). |
+| [`symbols.py`](crypto_price_alert/symbols.py) | Cached, validated symbol / coin lists for the searchable pickers (24 h TTL). |
 | [`widget.py`](crypto_price_alert/widget.py) | The frameless always‑on‑top card: alert rows, colour states, Re‑arm/Dismiss, theme, scanner links. |
 | [`dialogs.py`](crypto_price_alert/dialogs.py) | Add/edit‑alert dialog (searchable picker + live price) and settings. |
 | [`sound.py`](crypto_price_alert/sound.py) | Looping alert sound (`QSoundEffect` / `QMediaPlayer`). |
@@ -195,20 +181,12 @@ position, settings), `symcache_*.json`, the generated chime, `app.log`. Delete
 **Does it need an API key or login?** No. It calls the public CoinGecko and Binance
 endpoints anonymously.
 
-**Which exchanges / data sources?** **CoinGecko** and **Binance** (**Spot** and **USDⓈ‑M
-Futures**) for crypto, and **Yahoo Finance** for **US and Indian (NSE/BSE) stocks**.
-Chosen per alert.
-
-**Can I set alerts on stocks, not just crypto?** Yes — pick **Stock** as the source, then
-**United States** or **India** as the region, and search by company name or ticker.
+**Which exchanges / data sources?** **CoinGecko** and **Binance** — both **Spot** and
+**USDⓈ‑M Futures**. Chosen per alert.
 
 **Are the prices real‑time?** Binance prices stream over **WebSocket** (sub‑second).
-CoinGecko and stocks are polled on an interval (default 60 s, min 15 s, to be a good
-citizen of both APIs' free/anonymous access).
-
-**Does the stock alert work during market close / after hours?** The price simply won't
-move outside trading hours (Yahoo returns the last traded price), so an alert only fires
-once the market reopens and actually crosses your threshold.
+CoinGecko is polled on an interval (default 60 s, min 15 s to respect its free rate
+limit).
 
 **Does it run on macOS or Linux?** Not yet. The app is Python + PySide6 so it could be
 ported, but auto‑start, the installer and the tray behaviour are Windows‑specific today.
@@ -217,8 +195,7 @@ ported, but auto‑start, the installer and the tray behaviour are Windows‑spe
 automatically when I sign in"** in Settings (or the matching checkbox in the installer).
 
 **Is my data private?** Yes. Nothing is uploaded. The only outbound traffic is the HTTPS
-price requests to `api.coingecko.com`, `stream.binance.com` / `fapi.binance.com`, and
-`query1.finance.yahoo.com` (for stocks).
+price requests to `api.coingecko.com` and `stream.binance.com` / `fapi.binance.com`.
 
 **Why does Windows warn about the installer?** It isn't code‑signed. Click *More info →
 Run anyway*, or build it yourself from source.
@@ -230,13 +207,11 @@ Run anyway*, or build it yourself from source.
 crypto price alert · cryptocurrency price alert app · bitcoin price alert · desktop
 crypto widget · Binance price alert · CoinGecko price alert · Binance futures alert ·
 crypto price notification · altcoin price alarm · Windows system tray crypto ·
-real‑time crypto price alert · free crypto price tracker · stock price alert app ·
-US stock price alert · Indian stock price alert · NSE price alert · BSE price alert ·
-Yahoo Finance price alert · desktop stock alert widget · PySide6
+real‑time crypto price alert · free crypto price tracker · PySide6
 
 ---
 
 ## License
 
-[MIT](LICENSE) © 2026 VolumeRadar. Not affiliated with Binance, CoinGecko, or Yahoo
-Finance. Not financial advice — use at your own risk.
+[MIT](LICENSE) © 2026 VolumeRadar. Not affiliated with Binance or CoinGecko. Not
+financial advice — use at your own risk.
