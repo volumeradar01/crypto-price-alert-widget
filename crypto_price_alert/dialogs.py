@@ -295,6 +295,14 @@ class AlertDialog(QDialog):
             self._stock_display_to_symbol[d] = sym
         self._completer_model.setStringList(display)
 
+        # The model just changed *after* the user stopped typing -- Qt does not
+        # reopen the completer popup on its own for that, so without this the
+        # matches sit in the model with no visible way to pick one.
+        completer = self.ident.completer()
+        if display and self.ident.hasFocus() and completer is not None:
+            completer.setCompletionPrefix(self.ident.text())
+            completer.complete()
+
     def _resolve_stock_symbol(self, text: str) -> str:
         text = text.strip()
         return self._stock_display_to_symbol.get(text, text.upper())
@@ -353,6 +361,12 @@ class AlertDialog(QDialog):
         self.current_lbl.setText(f"Current: {_fmt(price)} {unit}".rstrip())
         self._last_probe_price = float(price)
 
+    def _current_price_confirmed(self) -> bool:
+        """Whether the 'Current:' line shows a real, freshly-fetched price."""
+        return self.current_lbl.text() not in (
+            "Current: —", "Current: …", "Current: unavailable",
+        )
+
     # ----- load / resolve / accept -----------------------------
     def _load(self, a: Alert):
         self.source.setCurrentIndex(max(0, self.source.findData(a.source)))
@@ -407,6 +421,15 @@ class AlertDialog(QDialog):
             coin_id = "bitcoin"
         elif source == "stock":
             stock_symbol = self._resolve_stock_symbol(ident)
+            if not self._current_price_confirmed():
+                if QMessageBox.question(
+                    self, "Unverified ticker",
+                    f"Couldn't fetch a live price for '{stock_symbol}'.\n\n"
+                    "That usually means the ticker is wrong — try picking a match from "
+                    "the search dropdown instead of typing the full name.\n\n"
+                    "Save this alert anyway?",
+                ) != QMessageBox.Yes:
+                    return
             coin_id = "bitcoin"
         else:
             coin_id, status = self._resolve_identifier()
