@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "crypto-price-alert"
-version = "1.2.2"
-description = "Free desktop crypto price alert widget for Windows — Bitcoin & altcoin price alerts with desktop notifications, live Binance (spot + futures) and CoinGecko prices, and a system-tray widget."
+version = "1.3.0"
+description = "Free desktop price alert widget for Windows — crypto (Bitcoin, altcoins, Binance spot/futures, CoinGecko) and stocks (US + Indian NSE/BSE via Yahoo Finance), with desktop notifications and a system-tray widget."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -13,6 +13,8 @@ keywords = [
     "crypto", "cryptocurrency", "price-alert", "price-alerts", "bitcoin", "ethereum",
     "altcoin", "binance", "coingecko", "binance-futures", "desktop-widget",
     "system-tray", "notifications", "websocket", "trading-tools", "windows", "pyside6",
+    "stock-alert", "stock-price-alert", "nse", "bse", "yahoo-finance", "indian-stocks",
+    "us-stocks",
 ]
 classifiers = [
     "Environment :: Win32 (MS Windows)",

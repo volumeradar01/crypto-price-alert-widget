@@ -4,7 +4,7 @@
 
 #define MyAppName "Crypto Price Alerts"
 #define MyAppShort "CryptoPriceAlert"
-#define MyAppVersion "1.2.2"
+#define MyAppVersion "1.3.0"
 #define MyAppPublisher "Crypto Price Alerts"
 #define MyAppExe "CryptoPriceAlert.exe"
 

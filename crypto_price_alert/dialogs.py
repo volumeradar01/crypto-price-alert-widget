@@ -61,6 +61,7 @@ class AlertDialog(QDialog):
 
     _symbolsLoaded = Signal(str, list)
     _priceProbed = Signal(str, object)
+    _stockSearchReady = Signal(str, list)
 
     def __init__(self, config, alert: Alert | None = None, parent=None):
         super().__init__(parent)
@@ -74,14 +75,14 @@ class AlertDialog(QDialog):
         self._cg_display_to_id: dict[str, str] = {}
         self._cg_ids: set[str] = set()
         self._bn_symbols: set[str] = set()
+        self._stock_display_to_symbol: dict[str, str] = {}
 
         self.source = QComboBox()
         self.source.addItem("CoinGecko", "coingecko")
         self.source.addItem("Binance", "binance")
+        self.source.addItem("Stock", "stock")
 
-        self.market = QComboBox()
-        self.market.addItem("Spot", "spot")
-        self.market.addItem("Futures", "futures")
+        self.market = QComboBox()          # options rebuilt per source in _on_target_changed
         self.market_label = QLabel("Market")
 
         self.ident = QLineEdit()
@@ -145,21 +146,24 @@ class AlertDialog(QDialog):
 
         self._probe_timer = QTimer(self)
         self._probe_timer.setSingleShot(True)
-        self._probe_timer.timeout.connect(self._probe_now)
+        self._probe_timer.timeout.connect(self._on_ident_settled)
 
         self._symbolsLoaded.connect(self._on_symbols_loaded)
         self._priceProbed.connect(self._on_price_probed)
+        self._stockSearchReady.connect(self._on_stock_search)
 
         self.source.currentIndexChanged.connect(self._on_target_changed)
         self.market.currentIndexChanged.connect(self._on_target_changed)
         self.ident.textEdited.connect(lambda _t: self._probe_timer.start(450))
         self.vs.textEdited.connect(lambda _t: self._probe_timer.start(600))
 
-        # a fresh alert defaults to the user's source, Futures market, and an
-        # empty symbol box (the "BTCUSDT" placeholder is the hint)
+        # a fresh alert defaults to the user's source and an empty symbol box
+        # (the placeholder, e.g. "BTCUSDT" / "AAPL", is the hint); Binance
+        # defaults to Futures, stock defaults to US
+        seed_market = "futures" if config.default_source == "binance" else "US"
         self._load(alert or Alert(
             threshold=0.0, source=config.default_source,
-            market="futures", symbol="", coin_id="",
+            market=seed_market, symbol="", coin_id="",
         ))
         self._on_target_changed()
 
@@ -173,23 +177,72 @@ class AlertDialog(QDialog):
         except (AttributeError, TypeError):  # Qt < 6.4
             field_widget.setVisible(visible)
 
+    def _source_kind(self) -> str:
+        return self.source.currentData()  # "coingecko" | "binance" | "stock"
+
+    def _configure_market_combo(self):
+        """Market combo means different things per source: Binance market
+        (Spot/Futures) or stock region (US/India). Rebuilt on each source
+        change, preserving the previous selection where it still applies."""
+        kind = self._source_kind()
+        options = {
+            "binance": [("Spot", "spot"), ("Futures", "futures")],
+            "stock": [("United States", "US"), ("India", "IN")],
+        }.get(kind, [])
+        current = self.market.currentData()
+        self.market.blockSignals(True)
+        self.market.clear()
+        for label, value in options:
+            self.market.addItem(label, value)
+        if current is not None:
+            idx = self.market.findData(current)
+            if idx >= 0:
+                self.market.setCurrentIndex(idx)
+        self.market.blockSignals(False)
+        self.market_label.setText("Region" if kind == "stock" else "Market")
+
     def _on_target_changed(self):
-        cg = self._is_coingecko()
-        self.ident_label.setText("CoinGecko coin" if cg else "Binance symbol")
-        self.ident.setPlaceholderText("bitcoin" if cg else "BTCUSDT")
-        self._set_row_visible(self.market, not cg)
-        self._set_row_visible(self.vs, cg)
+        kind = self._source_kind()
+        self._configure_market_combo()
+        self._set_row_visible(self.market, kind in ("binance", "stock"))
+        self._set_row_visible(self.vs, kind == "coingecko")
+
+        if kind == "coingecko":
+            self.ident_label.setText("CoinGecko coin")
+            self.ident.setPlaceholderText("bitcoin")
+        elif kind == "binance":
+            self.ident_label.setText("Binance symbol")
+            self.ident.setPlaceholderText("BTCUSDT")
+        else:
+            self.ident_label.setText("Stock ticker")
+            self.ident.setPlaceholderText(
+                "AAPL" if self.market.currentData() != "IN" else "RELIANCE"
+            )
+
         self._reload_symbols()
         self._probe_timer.start(150)
 
     def _reload_symbols(self):
-        kind = "coingecko_coins" if self._is_coingecko() else symbols.binance_key(self.market.currentData())
+        kind = self._source_kind()
         self._completer_model.setStringList([])
-        symbols.get_async(kind, lambda k, items: self._symbolsLoaded.emit(k, items))
+        if kind == "coingecko":
+            symbols.get_async("coingecko_coins", lambda k, items: self._symbolsLoaded.emit(k, items))
+        elif kind == "binance":
+            key = symbols.binance_key(self.market.currentData())
+            symbols.get_async(key, lambda k, items: self._symbolsLoaded.emit(k, items))
+        # stock: no pre-cached list -- results arrive live from _search_stocks_now()
+        # as the user types (see ident.textEdited -> _probe_timer -> _on_target_changed
+        # or direct edits below).
 
     @Slot(str, list)
     def _on_symbols_loaded(self, kind: str, items: list):
-        cur_kind = "coingecko_coins" if self._is_coingecko() else symbols.binance_key(self.market.currentData())
+        src = self._source_kind()
+        if src == "coingecko":
+            cur_kind = "coingecko_coins"
+        elif src == "binance":
+            cur_kind = symbols.binance_key(self.market.currentData())
+        else:
+            return
         if kind != cur_kind:
             return
         if kind == "coingecko_coins":
@@ -206,6 +259,46 @@ class AlertDialog(QDialog):
             self._bn_symbols = set(items)
             self._completer_model.setStringList(list(items))
 
+    def _search_stocks_now(self):
+        """Live Yahoo Finance ticker search, debounced via _probe_timer."""
+        query = self.ident.text().strip()
+        if len(query) < 2:
+            self._stock_display_to_symbol.clear()
+            self._completer_model.setStringList([])
+            return
+        market = self.market.currentData() or "US"
+        token = f"{market}|{query.lower()}"
+        self._stock_search_token = token
+
+        def work():
+            try:
+                items = symbols.search_stocks(query, market)
+            except Exception:  # noqa: BLE001
+                items = []
+            self._stockSearchReady.emit(token, items)
+
+        threading.Thread(target=work, name="stock-search", daemon=True).start()
+
+    @Slot(str, list)
+    def _on_stock_search(self, token: str, items: list):
+        if self._source_kind() != "stock" or token != getattr(self, "_stock_search_token", None):
+            return
+        # Merge into the map rather than clearing it: picking a suggestion re-fires
+        # this debounce (the completer edits the text field, which re-triggers the
+        # search), and that follow-up search is for the *display string* itself and
+        # may return few/no matches -- clearing here would erase the very mapping
+        # we just resolved against, right before _accept() reads it.
+        display = []
+        for sym, name, exch in items:
+            d = f"{name}  ·  {sym}  ·  {exch}".strip(" ·")
+            display.append(d)
+            self._stock_display_to_symbol[d] = sym
+        self._completer_model.setStringList(display)
+
+    def _resolve_stock_symbol(self, text: str) -> str:
+        text = text.strip()
+        return self._stock_display_to_symbol.get(text, text.upper())
+
     def _probe_target(self) -> Alert | None:
         ident = self.ident.text().strip()
         if not ident:
@@ -215,10 +308,18 @@ class AlertDialog(QDialog):
         if a.source == "coingecko":
             a.coin_id = self._resolve_identifier()[0]
             a.vs_currency = (self.vs.text().strip() or "usd").lower()
+        elif a.source == "stock":
+            a.market = self.market.currentData() or "US"
+            a.symbol = self._resolve_stock_symbol(ident)
         else:
             a.market = self.market.currentData()
             a.symbol = ident.upper()
         return a
+
+    def _on_ident_settled(self):
+        self._probe_now()
+        if self._source_kind() == "stock":
+            self._search_stocks_now()
 
     def _probe_now(self):
         target = self._probe_target()
@@ -242,8 +343,13 @@ class AlertDialog(QDialog):
         if price is None:
             self.current_lbl.setText("Current: unavailable")
             return
-        unit = (self.vs.text().strip().upper() if self._is_coingecko()
-                else _quote_asset(self.ident.text()))
+        kind = self._source_kind()
+        if kind == "coingecko":
+            unit = self.vs.text().strip().upper()
+        elif kind == "stock":
+            unit = "INR" if (self.market.currentData() or "US") == "IN" else "USD"
+        else:
+            unit = _quote_asset(self.ident.text())
         self.current_lbl.setText(f"Current: {_fmt(price)} {unit}".rstrip())
         self._last_probe_price = float(price)
 
@@ -288,6 +394,7 @@ class AlertDialog(QDialog):
 
         source = self.source.currentData()
         market = self.market.currentData()
+        stock_symbol = ""
         if source == "binance":
             sym = ident.upper()
             if self._bn_symbols and sym not in self._bn_symbols:
@@ -297,6 +404,9 @@ class AlertDialog(QDialog):
                     "Pick one from the search list.",
                 )
                 return
+            coin_id = "bitcoin"
+        elif source == "stock":
+            stock_symbol = self._resolve_stock_symbol(ident)
             coin_id = "bitcoin"
         else:
             coin_id, status = self._resolve_identifier()
@@ -312,6 +422,8 @@ class AlertDialog(QDialog):
         if source == "coingecko":
             a.coin_id = coin_id
             a.vs_currency = (self.vs.text().strip() or "usd").lower()
+        elif source == "stock":
+            a.symbol = stock_symbol
         else:
             a.symbol = ident.upper()
         a.label = self.name.text().strip()
@@ -342,6 +454,7 @@ class SettingsDialog(QDialog):
         self.default_source = QComboBox()
         self.default_source.addItem("CoinGecko", "coingecko")
         self.default_source.addItem("Binance", "binance")
+        self.default_source.addItem("Stock", "stock")
         self.default_source.setCurrentIndex(
             max(0, self.default_source.findData(config.default_source))
         )
